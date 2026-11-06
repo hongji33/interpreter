@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>실시간 통역 · 实时翻译</title>
+<meta name="theme-color" content="#0b1530">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗣️</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+<style>
+:root{
+  --bg1:#0b1530; --bg2:#13244d; --card:rgba(255,255,255,.07); --line:rgba(255,255,255,.12);
+  --text:#f3f6ff; --muted:#9fb0d6; --gold:#ffc861; --red:#ff5a6a; --blue:#4f8cff; --green:#38d39f;
+  --fs:1;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:linear-gradient(160deg,var(--bg1),var(--bg2) 60%,#1d1640);color:var(--text);
+  font-family:Pretendard,-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;overflow:hidden}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input{font:inherit}
+.screen{position:fixed;inset:0;display:none;flex-direction:column;padding:max(18px,env(safe-area-inset-top)) 18px max(18px,env(safe-area-inset-bottom));overflow-y:auto}
+.screen.active{display:flex;animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+h1{font-size:26px;margin:10px 0 4px;letter-spacing:-.5px}
+h2{font-size:20px;margin:6px 0 14px}
+.sub{color:var(--muted);font-size:15px;line-height:1.5;margin:0 0 22px}
+.logo{font-size:44px;margin-top:20px}
+.choices{display:flex;flex-direction:column;gap:14px}
+.choice{display:flex;align-items:center;gap:16px;padding:20px;border-radius:20px;background:var(--card);border:1px solid var(--line);text-align:left;transition:.15s}
+.choice:active{transform:scale(.98);background:rgba(255,255,255,.13)}
+.choice .flag{font-size:40px}
+.choice b{display:block;font-size:21px}
+.choice span{color:var(--muted);font-size:14px}
+.btn{padding:16px 20px;border-radius:16px;background:linear-gradient(135deg,var(--gold),#ff9d5c);color:#2a1600;font-weight:800;font-size:18px;width:100%}
+.btn.ghost{background:var(--card);color:var(--text);border:1px solid var(--line);font-weight:600}
+.btn:active{transform:scale(.98)}
+.back{align-self:flex-start;color:var(--muted);padding:6px 0;font-size:15px}
+.codebox{text-align:center;margin:10px 0 18px}
+.code{font-size:64px;font-weight:900;letter-spacing:12px;color:var(--gold);font-variant-numeric:tabular-nums}
+.qr{background:#fff;border-radius:18px;padding:12px;width:210px;height:210px;margin:8px auto}
+.qr svg{width:100%;height:100%}
+.codeinput{font-size:44px;text-align:center;letter-spacing:14px;width:100%;padding:14px;border-radius:18px;border:2px solid var(--line);background:rgba(0,0,0,.25);color:var(--gold);font-weight:800;outline:none}
+.codeinput:focus{border-color:var(--gold)}
+.wait{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--muted);margin:14px 0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--muted);animation:blink 1.2s infinite}
+@keyframes blink{50%{opacity:.25}}
+.langrow{display:flex;gap:10px;margin-bottom:20px}
+.langrow button{flex:1;padding:14px 6px;border-radius:14px;background:var(--card);border:2px solid var(--line);font-size:16px}
+.langrow button.on{border-color:var(--gold);background:rgba(255,200,97,.15)}
+.note{font-size:13px;color:var(--muted);line-height:1.55;margin-top:18px;padding:12px 14px;border-radius:14px;background:rgba(0,0,0,.2)}
+
+/* ===== Talk screen ===== */
+#talk{padding:0}
+.top{display:flex;align-items:center;gap:8px;padding:max(12px,env(safe-area-inset-top)) 14px 10px;border-bottom:1px solid var(--line);background:rgba(0,0,0,.18)}
+.pill{display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:99px;background:var(--card);font-size:14px;font-weight:600}
+.pill i{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.pill.ok i{background:var(--green);box-shadow:0 0 10px var(--green)}
+.pill.bad i{background:var(--red)}
+.room{font-size:13px;color:var(--muted)}
+.sp{flex:1}
+.icon{width:40px;height:40px;border-radius:12px;background:var(--card);font-size:19px;display:grid;place-items:center}
+.stage{padding:14px 14px 4px}
+.subtitle{border-radius:22px;padding:18px;min-height:150px;background:linear-gradient(135deg,rgba(79,140,255,.18),rgba(255,90,106,.12));border:1px solid var(--line);position:relative}
+.subtitle .who{font-size:13px;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.subtitle .big{font-size:calc(28px * var(--fs));font-weight:800;line-height:1.35;word-break:keep-all;overflow-wrap:anywhere}
+.subtitle .orig{font-size:calc(15px * var(--fs));color:var(--muted);margin-top:8px;line-height:1.45}
+.subtitle.live .big{color:#d8e3ff}
+.subtitle .ph{color:var(--muted);font-size:17px;font-weight:500}
+.speaking{display:none;position:absolute;right:14px;top:14px;font-size:13px;color:var(--gold)}
+.subtitle.tts .speaking{display:block}
+.log{flex:1;overflow-y:auto;padding:8px 14px 10px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:86%;padding:11px 14px;border-radius:18px;line-height:1.45;font-size:calc(16px * var(--fs));animation:fade .25s}
+.msg small{display:block;color:var(--muted);font-size:calc(13px * var(--fs));margin-top:4px}
+.msg.them{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:6px}
+.msg.me{align-self:flex-end;background:rgba(255,200,97,.16);border:1px solid rgba(255,200,97,.3);border-bottom-right-radius:6px}
+.msg .replay{margin-left:6px;opacity:.7}
+.bottom{padding:10px 14px max(14px,env(safe-area-inset-bottom));border-top:1px solid var(--line);background:rgba(0,0,0,.22)}
+.myinterim{min-height:22px;color:var(--gold);font-size:15px;text-align:center;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctrl{display:flex;align-items:center;justify-content:center;gap:22px}
+.mic{width:86px;height:86px;border-radius:50%;font-size:36px;background:linear-gradient(135deg,var(--blue),#7a5cff);box-shadow:0 8px 26px rgba(79,140,255,.45);position:relative;transition:.2s}
+.mic.on{background:linear-gradient(135deg,var(--red),#ff8a5c);box-shadow:0 8px 30px rgba(255,90,106,.55)}
+.mic.on::after{content:"";position:absolute;inset:-8px;border-radius:50%;border:3px solid rgba(255,90,106,.6);animation:pulse 1.4s infinite}
+.mic.hold{background:linear-gradient(135deg,#6b6f86,#4a4e66);box-shadow:none}
+.mic.hold::after{display:none}
+@keyframes pulse{from{transform:scale(.92);opacity:1}to{transform:scale(1.25);opacity:0}}
+.miclabel{text-align:center;color:var(--muted);font-size:14px;margin-top:8px}
+.typebar{display:none;gap:8px;margin-top:10px}
+.typebar.on{display:flex}
+.typebar input{flex:1;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--text);outline:none;font-size:16px}
+.typebar button{padding:0 16px;border-radius:14px;background:var(--gold);color:#2a1600;font-weight:800}
+
+/* ===== Solo (face-to-face) ===== */
+#solo{padding:0}
+.half{flex:1;display:flex;flex-direction:column;padding:14px;gap:10px;min-height:0}
+.half.flip{transform:rotate(180deg);background:rgba(255,90,106,.06)}
+.half .subtitle{flex:1;min-height:0;overflow-y:auto}
+.half .row{display:flex;align-items:center;gap:12px}
+.half .mic{width:70px;height:70px;font-size:30px;flex:none}
+.half .hint{flex:1;font-size:14px;color:var(--muted)}
+.half .hint b{color:var(--text);font-size:16px;display:block}
+.half .myinterim{text-align:left;margin:0}
+.divider{display:flex;align-items:center;justify-content:center;gap:10px;padding:6px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(0,0,0,.25)}
+.divider button{font-size:13px;color:var(--muted);padding:4px 10px;border-radius:10px;background:var(--card)}
+
+/* ===== Sheet ===== */
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;z-index:20}
+.sheet.on{display:flex}
+.sheet .panel{width:100%;background:#16244a;border-radius:24px 24px 0 0;padding:20px 20px max(24px,env(safe-area-inset-bottom));animation:up .25s}
+@keyframes up{from{transform:translateY(100%)}to{transform:none}}
+.setrow{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line);gap:12px}
+.seg{display:flex;gap:6px}
+.seg button{padding:8px 12px;border-radius:10px;background:var(--card);font-size:14px}
+.seg button.on{background:var(--gold);color:#2a1600;font-weight:700}
+.toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:rgba(0,0,0,.85);padding:12px 18px;border-radius:14px;font-size:15px;z-index:30;opacity:0;pointer-events:none;transition:.3s;max-width:90%;text-align:center}
+.toast.on{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- 1. Language -->
+<section class="screen active" id="s-lang">
+  <div class="logo">🗣️</div>
+  <h1>실시간 통역 · 实时翻译</h1>
+  <p class="sub">내가 쓰는 언어를 고르세요<br>请选择您使用的语言 · Choose your language</p>
+  <div class="choices">
+    <button class="choice" data-lang="ko"><span class="flag">🇰🇷</span><div><b>한국어</b><span>저는 한국어로 말해요</span></div></button>
+    <button class="choice" data-lang="zh"><span class="flag">🇨🇳</span><div><b>中文</b><span>我说中文</span></div></button>
+    <button class="choice" data-lang="en"><span class="flag">🇺🇸</span><div><b>English</b><span>I speak English</span></div></button>
+  </div>
+</section>
+
+<!-- 2. Mode -->
+<section class="screen" id="s-mode">
+  <button class="back" data-go="s-lang">← <span data-t="back"></span></button>
+  <h1 data-t="modeTitle"></h1>
+  <p class="sub" data-t="modeSub"></p>
+  <div class="choices">
+    <button class="choice" id="b-create"><span class="flag">📱</span><div><b data-t="create"></b><span data-t="createDesc"></span></div></button>
+    <button class="choice" id="b-join"><span class="flag">🔗</span><div><b data-t="join"></b><span data-t="joinDesc"></span></div></button>
+    <button class="choice" id="b-solo"><span class="flag">🤝</span><div><b data-t="solo"></b><span data-t="soloDesc"></span></div></button>
+  </div>
+  <div class="note" data-t="tip"></div>
+</section>
+
+<!-- 3a. Create room -->
+<section class="screen" id="s-create">
+  <button class="back" id="create-back">← <span data-t="back"></span></button>
+  <h2 data-t="yourCode"></h2>
+  <div class="codebox">
+    <div class="code" id="room-code">----</div>
+    <div class="qr" id="qr"></div>
+    <p class="sub" style="margin:8px 0 0" data-t="shareHint"></p>
+  </div>
+  <div class="wait"><span class="dot"></span><span id="create-status" data-t="waiting"></span></div>
+  <button class="btn ghost" id="b-startnow" data-t="startNow"></button>
+</section>
+
+<!-- 3b. Join -->
+<section class="screen" id="s-join">
+  <button class="back" data-go="s-mode">← <span data-t="back"></span></button>
+  <h2 data-t="enterCode"></h2>
+  <input class="codeinput" id="code-in" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+  <div style="height:16px"></div>
+  <button class="btn" id="b-connect" data-t="connect"></button>
+</section>
+
+<!-- 3c. Solo setup -->
+<section class="screen" id="s-solosetup">
+  <button class="back" data-go="s-mode">← <span data-t="back"></span></button>
+  <h2 data-t="partnerLangQ"></h2>
+  <div class="langrow" id="solo-langs"></div>
+  <button class="btn" id="b-solostart" data-t="start"></button>
+  <div class="note" data-t="soloNote"></div>
+</section>
+
+<!-- 4. Talk (two phones) -->
+<section class="screen" id="talk">
+  <div class="top">
+    <div class="pill" id="net-pill"><i></i><span id="net-text"></span></div>
+    <span class="room" id="room-label"></span>
+    <span class="sp"></span>
+    <button class="icon" id="b-type" title="keyboard">⌨️</button>
+    <button class="icon" id="b-set" title="settings">⚙️</button>
+  </div>
+  <div class="stage">
+    <div class="subtitle" id="sub-main">
+      <div class="who"><span id="sub-who"></span></div>
+      <span class="speaking">🔊</span>
+      <div class="big" id="sub-big"><span class="ph" data-t="subPh"></span></div>
+      <div class="orig" id="sub-orig"></div>
+    </div>
+  </div>
+  <div class="log" id="log"></div>
+  <div class="bottom">
+    <div class="myinterim" id="my-interim"></div>
+    <div class="ctrl"><button class="mic" id="mic">🎙️</button></div>
+    <div class="miclabel" id="mic-label"></div>
+    <div class="typebar" id="typebar"><input id="type-in" autocomplete="off"><button id="type-send" data-t="send"></button></div>
+  </div>
+</section>
+
+<!-- 5. Solo face-to-face -->
+<section class="screen" id="solo">
+  <div class="half flip" id="half-b">
+    <div class="subtitle" id="sub-b"><div class="who" id="who-b"></div><span class="speaking">🔊</span><div class="big" id="big-b"></div><div class="orig" id="orig-b"></div></div>
+    <div class="myinterim" id="int-b"></div>
+    <div class="row"><button class="mic" id="mic-b">🎙️</button><div class="hint" id="hint-b"></div></div>
+  </div>
+  <div class="divider"><button id="solo-exit">✕ <span data-t="leave"></span></button><button id="solo-set">⚙️</button></div>
+  <div class="half" id="half-a">
+    <div class="subtitle" id="sub-a"><div class="who" id="who-a"></div><span class="speaking">🔊</span><div class="big" id="big-a"></div><div class="orig" id="orig-a"></div></div>
+    <div class="myinterim" id="int-a"></div>
+    <div class="row"><button class="mic" id="mic-a">🎙️</button><div class="hint" id="hint-a"></div></div>
+  </div>
+</section>
+
+<!-- Settings sheet -->
+<div class="sheet" id="sheet">
+  <div class="panel">
+    <h2 data-t="settings"></h2>
+    <div class="setrow"><span data-t="voice"></span><div class="seg" id="set-voice"><button data-v="1">ON</button><button data-v="0">OFF</button></div></div>
+    <div class="setrow"><span data-t="speed"></span><div class="seg" id="set-rate"><button data-v="0.8">0.8×</button><button data-v="1">1×</button><button data-v="1.2">1.2×</button></div></div>
+    <div class="setrow"><span data-t="font"></span><div class="seg" id="set-fs"><button data-v="1">A</button><button data-v="1.25">A+</button><button data-v="1.55">A++</button></div></div>
+    <div style="height:16px"></div>
+    <button class="btn ghost" id="b-leave" data-t="leave"></button>
+    <div style="height:10px"></div>
+    <button class="btn" id="b-close" data-t="close"></button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= Languages & UI text ================= */
+const LANGS = {
+  ko:{flag:'🇰🇷', name:'한국어', sr:'ko-KR', gt:'ko',    mm:'ko-KR'},
+  zh:{flag:'🇨🇳', name:'中文',   sr:'zh-CN', gt:'zh-CN', mm:'zh-CN'},
+  en:{flag:'🇺🇸', name:'English',sr:'en-US', gt:'en',    mm:'en-US'}
+};
+const T = {
+ko:{back:'뒤로',modeTitle:'어떻게 대화할까요?',modeSub:'각자 휴대폰을 쓰면 상대 휴대폰에 자막과 음성으로 통역돼요.',
+ create:'방 만들기',createDesc:'코드를 만들어 상대에게 보여주세요',join:'방 참여하기',joinDesc:'상대가 보여준 4자리 코드 입력',
+ solo:'한 대로 마주보고 대화',soloDesc:'휴대폰 하나를 테이블에 두고 함께 사용',
+ tip:'💡 Android는 크롬, 아이폰은 사파리에서 사용하세요. 처음 마이크 권한을 꼭 "허용"해 주세요. 학교 Wi-Fi에 연결하면 가장 안정적이에요.',
+ yourCode:'방 코드',shareHint:'상대방이 QR을 찍거나 코드를 입력하면 연결돼요',waiting:'상대방을 기다리는 중…',startNow:'먼저 들어가서 기다리기',
+ enterCode:'4자리 방 코드를 입력하세요',connect:'연결하기',partnerLangQ:'상대방 언어를 고르세요',start:'시작하기',
+ soloNote:'휴대폰을 두 사람 사이에 놓으세요. 위쪽 화면은 상대방을 향해 뒤집혀 보여요. 말할 사람이 자기 쪽 마이크 버튼을 누르세요.',
+ subPh:'상대방이 말하면 여기에 통역 자막이 크게 나와요',partner:'상대방',me:'나',
+ tapToTalk:'버튼을 누르고 말하세요',listening:'듣고 있어요… 다시 누르면 멈춰요',hold:'상대 음성 재생 중 — 잠시 멈춤',
+ connected:'연결됨',connecting:'연결 중…',offline:'연결 끊김',alone:'상대 기다리는 중',joined:'상대방이 들어왔어요!',left:'상대방 연결이 끊겼어요',
+ send:'보내기',typePh:'글자로 입력해서 보내기',noSR:'이 브라우저는 음성인식을 지원하지 않아요. Android 크롬 / 아이폰 사파리를 써 주세요. 아래 ⌨️ 로 글자 입력은 가능해요.',
+ micDenied:'마이크 권한이 꺼져 있어요. 브라우저 설정에서 마이크를 허용해 주세요.',tfail:'번역 실패 — 원문 표시',
+ settings:'설정',voice:'음성으로 읽어주기',speed:'읽기 속도',font:'글자 크기',leave:'나가기',close:'닫기',
+ soloHint:'누르고 말하세요',soloOn:'듣는 중 · 다시 누르면 멈춤',room:'방'},
+zh:{back:'返回',modeTitle:'请选择对话方式',modeSub:'双方各用一部手机，对方说的话会以字幕和语音翻译到您的手机上。',
+ create:'创建房间',createDesc:'生成号码并给对方看',join:'加入房间',joinDesc:'输入对方给您的4位号码',
+ solo:'一部手机面对面',soloDesc:'把一部手机放在桌上共同使用',
+ tip:'💡 安卓请用 Chrome，苹果请用 Safari。首次使用请“允许”麦克风权限。连接学校 Wi-Fi 最稳定。',
+ yourCode:'房间号码',shareHint:'对方扫描二维码或输入号码即可连接',waiting:'正在等待对方…',startNow:'先进入等待',
+ enterCode:'请输入4位房间号码',connect:'连接',partnerLangQ:'请选择对方的语言',start:'开始',
+ soloNote:'请把手机放在两人中间。上半部分的画面是倒过来朝向对方的。说话的人请按自己这边的麦克风按钮。',
+ subPh:'对方说话时，这里会显示大号翻译字幕',partner:'对方',me:'我',
+ tapToTalk:'请按下按钮后说话',listening:'正在听… 再按一次停止',hold:'正在播放对方语音 — 暂停中',
+ connected:'已连接',connecting:'连接中…',offline:'连接中断',alone:'等待对方',joined:'对方已加入！',left:'对方已断开',
+ send:'发送',typePh:'输入文字发送',noSR:'此浏览器不支持语音识别。请使用安卓 Chrome 或苹果 Safari。可以用下方 ⌨️ 输入文字。',
+ micDenied:'麦克风权限已关闭，请在浏览器设置中允许麦克风。',tfail:'翻译失败 — 显示原文',
+ settings:'设置',voice:'语音朗读',speed:'朗读速度',font:'字体大小',leave:'退出',close:'关闭',
+ soloHint:'请按下后说话',soloOn:'正在听 · 再按停止',room:'房间'},
+en:{back:'Back',modeTitle:'How do you want to talk?',modeSub:'Each person uses their own phone; speech is translated to the other phone as subtitles and voice.',
+ create:'Create room',createDesc:'Make a code and show it',join:'Join room',joinDesc:'Enter the 4-digit code',
+ solo:'One phone, face to face',soloDesc:'Share one phone on the table',
+ tip:'💡 Use Chrome on Android or Safari on iPhone. Allow microphone access. School Wi-Fi is most stable.',
+ yourCode:'Room code',shareHint:'Partner scans the QR or types the code',waiting:'Waiting for partner…',startNow:'Enter and wait',
+ enterCode:'Enter the 4-digit room code',connect:'Connect',partnerLangQ:"Choose your partner's language",start:'Start',
+ soloNote:'Place the phone between you. The top half is upside down for your partner. Tap your own mic to speak.',
+ subPh:'Translated subtitles appear here when your partner speaks',partner:'Partner',me:'Me',
+ tapToTalk:'Tap and speak',listening:'Listening… tap again to stop',hold:'Partner audio playing — paused',
+ connected:'Connected',connecting:'Connecting…',offline:'Offline',alone:'Waiting',joined:'Partner joined!',left:'Partner disconnected',
+ send:'Send',typePh:'Type to send',noSR:'Speech recognition is not supported here. Use Chrome (Android) or Safari (iPhone). You can still type with ⌨️.',
+ micDenied:'Microphone is blocked. Please allow it in browser settings.',tfail:'Translation failed — showing original',
+ settings:'Settings',voice:'Read aloud',speed:'Speed',font:'Text size',leave:'Leave',close:'Close',
+ soloHint:'Tap and speak',soloOn:'Listening · tap to stop',room:'Room'}
+};
+
+/* ================= State ================= */
+const $ = id => document.getElementById(id);
+const store = { get(k,d){try{const v=localStorage.getItem('itp_'+k);return v==null?d:JSON.parse(v)}catch{return d}}, set(k,v){try{localStorage.setItem('itp_'+k,JSON.stringify(v))}catch{}} };
+const S = {
+  my: null, mode: null, room: null, soloOther: null,
+  voice: store.get('voice', true), rate: store.get('rate', 1), fs: store.get('fs', 1.25),
+};
+const params = new URLSearchParams(location.search);
+const pendingRoom = (params.get('room')||'').replace(/\D/g,'').slice(0,4) || null;
+const t = k => (T[S.my||'ko'][k] ?? T.ko[k] ?? k);
+
+function applyLang(){
+  document.documentElement.lang = S.my==='zh'?'zh-CN':S.my;
+  document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
+  $('type-in').placeholder = t('typePh');
+}
+function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active', s.id===id)); }
+let toastT; function toast(msg,ms=2600){ const el=$('toast'); el.textContent=msg; el.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('on'),ms); }
+document.documentElement.style.setProperty('--fs', S.fs);
+
+/* ================= Translation ================= */
+const tcache = new Map();
+async function translate(text, from, to){
+  if(!text || from===to) return text;
+  const key = from+'|'+to+'|'+text; if(tcache.has(key)) return tcache.get(key);
+  let out = null;
+  try{
+    const u = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl='+LANGS[from].gt+'&tl='+LANGS[to].gt+'&q='+encodeURIComponent(text);
+    const r = await fetch(u); if(!r.ok) throw 0;
+    const d = await r.json(); out = d[0].map(s=>s[0]).join('').trim();
+  }catch(e){
+    try{
+      const u = 'https://api.mymemory.translated.net/get?langpair='+LANGS[from].mm+'|'+LANGS[to].mm+'&q='+encodeURIComponent(text);
+      const r = await fetch(u); const d = await r.json();
+      if(d && d.responseData && d.responseStatus==200) out = d.responseData.translatedText;
+    }catch(e2){}
+  }
+  if(out){ tcache.set(key,out); if(tcache.size>300) tcache.delete(tcache.keys().next().value); }
+  return out;
+}
+
+/* ================= Speech output (TTS) ================= */
+let voices = [];
+function loadVoices(){ try{ voices = speechSynthesis.getVoices()||[]; }catch{} }
+if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function pickVoice(lang){
+  const pre = LANGS[lang].sr.toLowerCase(), base = pre.split('-')[0];
+  const list = voices.filter(v=>v.lang && v.lang.toLowerCase().replace('_','-').startsWith(base));
+  if(lang==='zh'){ const cn = list.find(v=>/zh[-_]cn|cmn/i.test(v.lang)); if(cn) return cn; }
+  return list.find(v=>v.lang.toLowerCase().replace('_','-')===pre) || list[0] || null;
+}
+function unlockAudio(){
+  try{ if(!('speechSynthesis' in window)) return; const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); }catch{}
+}
+let ttsChain = Promise.resolve(), ttsCount = 0;
+function speak(text, lang, onStart, onEnd){
+  if(!S.voice || !('speechSynthesis' in window) || !text) return;
+  ttsCount++;
+  if(ttsCount===1){ Listener.pause('tts'); Net.send({type:'tts', on:true}); }
+  onStart && onStart();
+  ttsChain = ttsChain.then(()=>new Promise(res=>{
+    let done=false; const fin=()=>{ if(done) return; done=true; res(); };
+    try{
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = LANGS[lang].sr; const v = pickVoice(lang); if(v) u.voice = v;
+      u.rate = S.rate; u.onend = fin; u.onerror = fin;
+      speechSynthesis.speak(u);
+      setTimeout(fin, 2500 + text.length*(lang==='en'?90:280)/S.rate);
+    }catch{ fin(); }
+  })).then(()=>{
+    onEnd && onEnd();
+    ttsCount--;
+    if(ttsCount===0){ Net.send({type:'tts', on:false}); setTimeout(()=>Listener.resume('tts'), 350); }
+  });
+}
+
+/* ================= Speech input (recognition) ================= */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const isAndroid = /android/i.test(navigator.userAgent);
+const Listener = {
+  rec:null, want:false, lang:null, cb:null, holds:new Set(), lastInterim:'', fatal:false,
+  start(lang, cb){ this.stop(); this.lang=lang; this.cb=cb; this.want=true; this.fatal=false; this._run(); this._state(); },
+  stop(){ this.want=false; this._kill(); this.lastInterim=''; this._state(); },
+  active(){ return this.want; },
+  pause(reason){ this.holds.add(reason); this._flush(); this._kill(); this._state(); },
+  resume(reason){ this.holds.delete(reason); this._state(); if(this.holds.size===0) setTimeout(()=>this._run(),150); },
+  _state(){ this.cb && this.cb.state && this.cb.state(this.want, this.holds.size>0); },
+  _flush(){ const s=this.lastInterim.trim(); this.lastInterim=''; if(s && this.cb){ this.cb.interim(''); this.cb.final(s); } },
+  _kill(){ const r=this.rec; this.rec=null; if(r){ try{ r.onresult=null; r.abort(); }catch{} } },
+  _run(){
+    if(!SR || !this.want || this.holds.size>0 || this.rec) return;
+    const r = new SR();
+    r.lang = LANGS[this.lang].sr; r.interimResults = true; r.maxAlternatives = 1;
+    r.continuous = !isAndroid;
+    r.onresult = e=>{
+      let interim='';
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        const res=e.results[i], txt=res[0].transcript;
+        if(res.isFinal){ const s=txt.trim(); this.lastInterim=''; if(s) this.cb.final(s); }
+        else interim += txt;
+      }
+      this.lastInterim = interim; this.cb.interim(interim.trim());
+    };
+    r.onerror = e=>{
+      if(e.error==='not-allowed' || e.error==='service-not-allowed'){ this.want=false; this.fatal=true; toast(t('micDenied'),5000); this._state(); }
+    };
+    r.onend = ()=>{
+      if(this.rec!==r) return;
+      this.rec=null; this._flush();
+      if(this.want && this.holds.size===0 && !this.fatal) setTimeout(()=>this._run(), 120);
+    };
+    try{ r.start(); this.rec=r; }catch(err){ this.rec=null; setTimeout(()=>this._run(), 500); }
+  }
+};
+
+/* ================= Network (public MQTT brokers, all at once) ================= */
+const BROKERS = ['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt','wss://test.mosquitto.org:8081/mqtt'];
+const myId = Math.random().toString(36).slice(2,10);
+const Net = {
+  clients:[], topic:null, seen:new Set(), peers:new Map(), onMsg:null, timer:null,
+  connect(room){
+    this.close(); this.topic = 'hj33-interp/v1/room-'+room;
+    BROKERS.forEach(url=>{
+      try{
+        const c = mqtt.connect(url, {clientId:'itp_'+myId+'_'+Math.random().toString(36).slice(2,6), clean:true, connectTimeout:8000, reconnectPeriod:3000, keepalive:30});
+        c.on('connect', ()=>{ c.subscribe(this.topic, {qos:0}); this.send({type:'hello'}); updateNet(); });
+        c.on('close', updateNet); c.on('offline', updateNet); c.on('error', ()=>{});
+        c.on('message', (tp, buf)=>{
+          let m; try{ m=JSON.parse(buf.toString()); }catch{ return; }
+          if(!m || m.from===myId || this.seen.has(m.mid)) return;
+          this.seen.add(m.mid); if(this.seen.size>500) this.seen.delete(this.seen.values().next().value);
+          this._handle(m);
+        });
+        this.clients.push(c);
+      }catch(e){}
+    });
+    this.timer = setInterval(()=>{ this.send({type:'ping'}); this._prune(); }, 7000);
+    updateNet();
+  },
+  close(){ clearInterval(this.timer); this.clients.forEach(c=>{try{c.end(true)}catch{}}); this.clients=[]; this.peers.clear(); },
+  online(){ return this.clients.some(c=>c.connected); },
+  send(obj){
+    if(!this.topic) return;
+    const m = Object.assign({mid:myId+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6), from:myId, lang:S.my}, obj);
+    const s = JSON.stringify(m);
+    this.clients.forEach(c=>{ if(c.connected) try{ c.publish(this.topic, s, {qos:0}); }catch{} });
+  },
+  _handle(m){
+    const isNew = !this.peers.has(m.from);
+    this.peers.set(m.from, {lang:m.lang, last:Date.now()});
+    if(isNew){ this.send({type:'hello'}); onPeerJoin(m.from); updateNet(); }
+    if(m.type==='bye'){ this.peers.delete(m.from); releaseHold(m.from); updateNet(); toast(t('left')); return; }
+    this.onMsg && this.onMsg(m);
+  },
+  _prune(){
+    const now=Date.now(); let ch=false;
+    for(const [id,p] of this.peers){ if(now-p.last>25000){ this.peers.delete(id); releaseHold(id); ch=true; } }
+    if(ch){ updateNet(); toast(t('left')); }
+  },
+  partnerLang(){ for(const p of this.peers.values()) if(p.lang!==S.my) return p.lang; return null; }
+};
+function updateNet(){
+  const pill=$('net-pill'), txt=$('net-text'); if(!pill) return;
+  const n = Net.peers.size, on = Net.online();
+  pill.classList.toggle('ok', on && n>0); pill.classList.toggle('bad', !on);
+  if(!on) txt.textContent = Net.clients.length? t('connecting') : t('offline');
+  else if(n===0) txt.textContent = t('alone');
+  else { const flags=[...Net.peers.values()].map(p=>LANGS[p.lang]?.flag||'').join(''); txt.textContent = t('connected')+' '+flags; }
+  if(S.mode==='create' && n>0 && document.getElementById('s-create').classList.contains('active')) enterTalk();
+}
+const holdTimers = new Map();
+function releaseHold(id){ clearTimeout(holdTimers.get(id)); holdTimers.delete(id); Listener.resume('peer-'+id); }
+function onPeerJoin(){ toast(t('joined')); }
+window.addEventListener('pagehide', ()=>Net.send({type:'bye'}));
+
+/* ================= Screens ================= */
+document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{
+  S.my = b.dataset.lang; store.set('lang', S.my); applyLang(); unlockAudio();
+  if(pendingRoom){ joinRoom(pendingRoom); } else show('s-mode');
+});
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+
+$('b-create').onclick = ()=>{
+  unlockAudio();
+  S.mode='create'; S.room = String(1000+Math.floor(Math.random()*9000));
+  $('room-code').textContent = S.room;
+  const url = location.origin + location.pathname + '?room=' + S.room;
+  try{ const q=qrcode(0,'M'); q.addData(url); q.make(); $('qr').innerHTML = q.createSvgTag({cellSize:6, margin:2, scalable:true}); }catch{ $('qr').style.display='none'; }
+  Net.connect(S.room); show('s-create');
+};
+$('create-back').onclick = ()=>{ Net.close(); S.mode=null; show('s-mode'); };
+$('b-startnow').onclick = ()=>enterTalk();
+$('b-join').onclick = ()=>{ show('s-join'); setTimeout(()=>$('code-in').focus(),200); };
+$('code-in').oninput = e=>{ e.target.value=e.target.value.replace(/\D/g,'').slice(0,4); if(e.target.value.length===4) $('b-connect').focus(); };
+$('b-connect').onclick = ()=>{ const c=$('code-in').value; if(c.length!==4){ $('code-in').focus(); return; } unlockAudio(); joinRoom(c); };
+function joinRoom(code){ S.mode='join'; S.room=code; Net.connect(code); enterTalk(); }
+
+/* --- Two-phone talk --- */
+function enterTalk(){
+  show('talk'); $('room-label').textContent = t('room')+' '+S.room;
+  history.replaceState(null,'',location.pathname+'?room='+S.room);
+  setMicUI(false,false); updateNet(); keepAwake();
+  if(!SR){ toast(t('noSR'),6000); $('typebar').classList.add('on'); }
+}
+const talkCb = {
+  interim(txt){ $('my-interim').textContent = txt ? '🎙 '+txt : ''; if(txt) sendInterim(txt); },
+  final(txt){ $('my-interim').textContent=''; sendFinal(txt); },
+  state(want, held){ setMicUI(want, held); }
+};
+function setMicUI(want, held){
+  const m=$('mic'); m.classList.toggle('on', want && !held); m.classList.toggle('hold', want && held);
+  $('mic-label').textContent = !want ? t('tapToTalk') : held ? t('hold') : t('listening');
+}
+$('mic').onclick = ()=>{
+  unlockAudio();
+  if(!SR){ toast(t('noSR'),5000); return; }
+  if(Listener.active() && S.mode!=='solo') Listener.stop(); else Listener.start(S.my, talkCb);
+};
+let lastInterimSent=0, interimSid=null;
+function sendInterim(txt){
+  const now=Date.now(); if(now-lastInterimSent<450) return; lastInterimSent=now;
+  if(!interimSid) interimSid = myId+'-'+now;
+  Net.send({type:'interim', text:txt, sid:interimSid});
+}
+function sendFinal(txt){
+  const sid = interimSid || (myId+'-'+Date.now()); interimSid=null;
+  Net.send({type:'final', text:txt, sid});
+  const el = addLog('me', txt, '');
+  const pl = Net.partnerLang();
+  if(pl) translate(txt, S.my, pl).then(tr=>{ if(tr) el.querySelector('small').textContent = LANGS[pl].flag+' '+tr; });
+}
+$('b-type').onclick = ()=>{ $('typebar').classList.toggle('on'); if($('typebar').classList.contains('on')) $('type-in').focus(); };
+function sendTyped(){ const v=$('type-in').value.trim(); if(!v) return; $('type-in').value=''; sendFinal(v); }
+$('type-send').onclick = sendTyped;
+$('type-in').onkeydown = e=>{ if(e.key==='Enter') sendTyped(); };
+
+function addLog(who, big, small, lang){
+  const d=document.createElement('div'); d.className='msg '+who;
+  const b=document.createElement('div'); b.textContent=big; d.appendChild(b);
+  const s=document.createElement('small'); s.textContent=small; d.appendChild(s);
+  if(who==='them' && lang){
+    const r=document.createElement('button'); r.className='replay'; r.textContent='🔊';
+    r.onclick=()=>speak(big, S.my); b.appendChild(r);
+  }
+  const log=$('log'); log.appendChild(d); log.scrollTop=log.scrollHeight;
+  return d;
+}
+
+/* incoming messages */
+const liveTr = {};  // sid -> {last, busy}
+Net.onMsg = async m=>{
+  if(m.type==='tts'){
+    const key='peer-'+m.from;
+    if(m.on){ Listener.pause(key); clearTimeout(holdTimers.get(m.from)); holdTimers.set(m.from, setTimeout(()=>releaseHold(m.from), 20000)); }
+    else releaseHold(m.from);
+    return;
+  }
+  if(S.mode==='solo') return;
+  const flag = LANGS[m.lang]?.flag || '';
+  if(m.type==='interim'){
+    if(m.lang===S.my) return;
+    const box=$('sub-main'); box.classList.add('live');
+    $('sub-who').textContent = flag+' '+t('partner')+' …';
+    $('sub-orig').textContent = m.text;
+    const st = liveTr[m.sid] || (liveTr[m.sid]={last:0,busy:false,done:false});
+    if(!st.busy && Date.now()-st.last>1100){
+      st.busy=true; st.last=Date.now();
+      const tr = await translate(m.text, m.lang, S.my); st.busy=false;
+      if(tr && !st.done) $('sub-big').textContent = tr + ' …';
+    }
+    return;
+  }
+  if(m.type==='final'){
+    if(liveTr[m.sid]) liveTr[m.sid].done = true;
+    if(m.lang===S.my){ addLog('them', m.text, flag); return; }
+    $('sub-orig').textContent = m.text;
+    const tr = await translate(m.text, m.lang, S.my);
+    const out = tr || m.text;
+    const box=$('sub-main'); box.classList.remove('live');
+    $('sub-who').textContent = flag+' '+t('partner');
+    $('sub-big').textContent = out;
+    if(!tr) toast(t('tfail'));
+    addLog('them', out, flag+' '+m.text, m.lang);
+    speak(out, S.my, ()=>box.classList.add('tts'), ()=>box.classList.remove('tts'));
+  }
+};
+
+/* --- Solo face-to-face --- */
+$('b-solo').onclick = ()=>{
+  const row=$('solo-langs'); row.innerHTML='';
+  S.soloOther = S.my==='ko' ? 'zh' : 'ko';
+  Object.keys(LANGS).filter(k=>k!==S.my).forEach(k=>{
+    const b=document.createElement('button'); b.textContent=LANGS[k].flag+' '+LANGS[k].name; b.classList.toggle('on',k===S.soloOther);
+    b.onclick=()=>{ S.soloOther=k; row.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); };
+    row.appendChild(b);
+  });
+  show('s-solosetup');
+};
+$('b-solostart').onclick = ()=>{
+  unlockAudio(); S.mode='solo';
+  const A=S.my, B=S.soloOther;
+  $('who-a').textContent = LANGS[B].flag+' '+T[A].partner; $('who-b').textContent = LANGS[A].flag+' '+T[B].partner;
+  $('big-a').innerHTML = '<span class="ph">'+T[A].subPh+'</span>'; $('big-b').innerHTML = '<span class="ph">'+T[B].subPh+'</span>';
+  $('orig-a').textContent=''; $('orig-b').textContent='';
+  soloState(); show('solo'); keepAwake();
+  if(!SR) toast(t('noSR'),6000);
+};
+let soloSide=null;
+function soloCb(side){
+  const A=S.my, B=S.soloOther, from = side==='a'?A:B, to = side==='a'?B:A, other = side==='a'?'b':'a';
+  return {
+    interim(txt){ $('int-'+side).textContent = txt?'🎙 '+txt:''; },
+    async final(txt){
+      $('int-'+side).textContent='';
+      $('orig-'+other).textContent = txt;
+      const tr = await translate(txt, from, to);
+      $('big-'+other).textContent = tr || txt;
+      const box=$('sub-'+other);
+      speak(tr||txt, to, ()=>box.classList.add('tts'), ()=>box.classList.remove('tts'));
+    },
+    state(){ soloState(); }
+  };
+}
+function soloState(){
+  ['a','b'].forEach(side=>{
+    const L = side==='a'?S.my:S.soloOther;
+    const on = Listener.active() && soloSide===side, held = on && Listener.holds.size>0;
+    const m=$('mic-'+side); m.classList.toggle('on',on&&!held); m.classList.toggle('hold',held);
+    $('hint-'+side).innerHTML = '<b>'+LANGS[L].flag+' '+LANGS[L].name+'</b>'+(held?T[L].hold:on?T[L].soloOn:T[L].soloHint);
+  });
+}
+['a','b'].forEach(side=>{
+  $('mic-'+side).onclick = ()=>{
+    unlockAudio(); if(!SR){ toast(t('noSR'),5000); return; }
+    if(Listener.active() && soloSide===side){ Listener.stop(); soloSide=null; soloState(); return; }
+    soloSide=side; Listener.start(side==='a'?S.my:S.soloOther, soloCb(side));
+  };
+});
+$('solo-exit').onclick = ()=>{ Listener.stop(); soloSide=null; S.mode=null; show('s-mode'); };
+$('solo-set').onclick = ()=>openSheet();
+
+/* --- Settings --- */
+function seg(id, key, cast){
+  const el=$(id);
+  const paint=()=>el.querySelectorAll('button').forEach(b=>b.classList.toggle('on', cast(b.dataset.v)===S[key]));
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{ S[key]=cast(b.dataset.v); store.set(key,S[key]); paint();
+    if(key==='fs') document.documentElement.style.setProperty('--fs', S.fs);
+    if(key==='voice' && !S.voice) try{speechSynthesis.cancel()}catch{} });
+  paint();
+}
+seg('set-voice','voice', v=>v==='1'); seg('set-rate','rate', Number); seg('set-fs','fs', Number);
+function openSheet(){ $('sheet').classList.add('on'); }
+$('b-set').onclick = openSheet;
+$('b-close').onclick = ()=>$('sheet').classList.remove('on');
+$('sheet').onclick = e=>{ if(e.target.id==='sheet') $('sheet').classList.remove('on'); };
+$('b-leave').onclick = ()=>{
+  $('sheet').classList.remove('on'); Listener.stop(); soloSide=null;
+  Net.send({type:'bye'}); setTimeout(()=>Net.close(),200);
+  S.mode=null; $('log').innerHTML=''; history.replaceState(null,'',location.pathname);
+  show('s-mode');
+};
+
+/* --- Keep screen awake --- */
+let wakeLock=null;
+async function keepAwake(){ try{ if('wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); } }catch{} }
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && (S.mode)) keepAwake(); });
+
+/* --- Init --- */
+(function init(){
+  const saved = store.get('lang', null);
+  if(saved){ S.my = saved; }
+  applyLang();
+  if(pendingRoom){
+    // Came from QR link: highlight join hint
+    document.querySelector('#s-lang .sub').innerHTML = '🔗 '+'방 '+pendingRoom+' · 房间 '+pendingRoom+'<br>내가 쓰는 언어를 고르세요 · 请选择您的语言';
+  }
+})();
+</script>
+</body>
+</html>
