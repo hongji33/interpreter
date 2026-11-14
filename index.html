@@ -108,7 +108,20 @@ h2{font-size:20px;margin:6px 0 14px}
 /* ===== Sheet ===== */
 .sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;z-index:20}
 .sheet.on{display:flex}
-.sheet .panel{width:100%;background:#16244a;border-radius:24px 24px 0 0;padding:20px 20px max(24px,env(safe-area-inset-bottom));animation:up .25s}
+.sheet .panel{width:100%;max-height:90vh;overflow-y:auto;background:#16244a;border-radius:24px 24px 0 0;padding:20px 20px max(24px,env(safe-area-inset-bottom));animation:up .25s}
+.apisec{margin-top:16px;padding:14px;border-radius:18px;background:rgba(255,200,97,.07);border:1px solid rgba(255,200,97,.25)}
+.apihead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.apist{font-size:12px;padding:4px 9px;border-radius:99px;background:var(--card);color:var(--muted);white-space:nowrap}
+.apist.ok{background:rgba(56,211,159,.18);color:var(--green)}
+.apirow{display:flex;gap:8px}
+.apisec input,.apisec textarea{flex:1;width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--text);outline:none;font-size:15px;resize:vertical}
+.apisec textarea{margin-top:8px;font-size:14px}
+.apirow button{width:46px;border-radius:12px;background:var(--card);font-size:18px}
+.apibtns{display:flex;gap:8px;margin-top:10px}
+.apibtns .btn{font-size:15px;padding:12px 8px}
+.apimsg{font-size:13px;line-height:1.5;color:var(--muted);margin-top:10px;white-space:pre-line}
+.ai{display:none;font-size:12px;font-weight:800;padding:5px 9px;border-radius:99px;background:linear-gradient(135deg,var(--gold),#ff9d5c);color:#2a1600}
+.ai.on{display:inline-block}
 @keyframes up{from{transform:translateY(100%)}to{transform:none}}
 .setrow{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line);gap:12px}
 .seg{display:flex;gap:6px}
@@ -143,6 +156,8 @@ h2{font-size:20px;margin:6px 0 14px}
     <button class="choice" id="b-solo"><span class="flag">🤝</span><div><b data-t="solo"></b><span data-t="soloDesc"></span></div></button>
   </div>
   <div class="note" data-t="tip"></div>
+  <div style="height:12px"></div>
+  <button class="btn ghost" id="b-api" data-t="apiBtn"></button>
 </section>
 
 <!-- 3a. Create room -->
@@ -181,6 +196,7 @@ h2{font-size:20px;margin:6px 0 14px}
   <div class="top">
     <div class="pill" id="net-pill"><i></i><span id="net-text"></span></div>
     <span class="room" id="room-label"></span>
+    <span class="ai" id="ai-badge">✨ AI</span>
     <span class="sp"></span>
     <button class="icon" id="b-type" title="keyboard">⌨️</button>
     <button class="icon" id="b-set" title="settings">⚙️</button>
@@ -224,6 +240,13 @@ h2{font-size:20px;margin:6px 0 14px}
     <div class="setrow"><span data-t="voice"></span><div class="seg" id="set-voice"><button data-v="1">ON</button><button data-v="0">OFF</button></div></div>
     <div class="setrow"><span data-t="speed"></span><div class="seg" id="set-rate"><button data-v="0.8">0.8×</button><button data-v="1">1×</button><button data-v="1.2">1.2×</button></div></div>
     <div class="setrow"><span data-t="font"></span><div class="seg" id="set-fs"><button data-v="1">A</button><button data-v="1.25">A+</button><button data-v="1.55">A++</button></div></div>
+    <div class="apisec" id="api-sec">
+      <div class="apihead"><b data-t="apiTitle"></b><span class="apist" id="api-status"></span></div>
+      <div class="apirow"><input id="api-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false"><button id="api-eye" title="show">👁</button></div>
+      <textarea id="api-notes" rows="2"></textarea>
+      <div class="apibtns"><button class="btn" id="api-save" data-t="apiSave"></button><button class="btn ghost" id="api-try" data-t="apiTry"></button><button class="btn ghost" id="api-del" style="flex:0 0 72px" data-t="apiDel"></button></div>
+      <div class="apimsg" id="api-msg"></div>
+    </div>
     <div style="height:16px"></div>
     <button class="btn ghost" id="b-leave" data-t="leave"></button>
     <div style="height:10px"></div>
@@ -235,9 +258,9 @@ h2{font-size:20px;margin:6px 0 14px}
 <script>
 /* ================= Languages & UI text ================= */
 const LANGS = {
-  ko:{flag:'🇰🇷', name:'한국어', sr:'ko-KR', gt:'ko',    mm:'ko-KR'},
-  zh:{flag:'🇨🇳', name:'中文',   sr:'zh-CN', gt:'zh-CN', mm:'zh-CN'},
-  en:{flag:'🇺🇸', name:'English',sr:'en-US', gt:'en',    mm:'en-US'}
+  ko:{flag:'🇰🇷', name:'한국어', sr:'ko-KR', gt:'ko',    mm:'ko-KR', en:'Korean'},
+  zh:{flag:'🇨🇳', name:'中文',   sr:'zh-CN', gt:'zh-CN', mm:'zh-CN', en:'Simplified Chinese (Mandarin)'},
+  en:{flag:'🇺🇸', name:'English',sr:'en-US', gt:'en',    mm:'en-US', en:'English'}
 };
 const T = {
 ko:{back:'뒤로',modeTitle:'어떻게 대화할까요?',modeSub:'각자 휴대폰을 쓰면 상대 휴대폰에 자막과 음성으로 통역돼요.',
@@ -253,7 +276,10 @@ ko:{back:'뒤로',modeTitle:'어떻게 대화할까요?',modeSub:'각자 휴대�
  send:'보내기',typePh:'글자로 입력해서 보내기',noSR:'이 브라우저는 음성인식을 지원하지 않아요. Android 크롬 / 아이폰 사파리를 써 주세요. 아래 ⌨️ 로 글자 입력은 가능해요.',
  micDenied:'마이크 권한이 꺼져 있어요. 브라우저 설정에서 마이크를 허용해 주세요.',tfail:'번역 실패 — 원문 표시',
  settings:'설정',voice:'음성으로 읽어주기',speed:'읽기 속도',font:'글자 크기',leave:'나가기',close:'닫기',
- soloHint:'누르고 말하세요',soloOn:'듣는 중 · 다시 누르면 멈춤',room:'방'},
+ soloHint:'누르고 말하세요',soloOn:'듣는 중 · 다시 누르면 멈춤',room:'방',
+ apiBtn:'🔑 번역 API 키 설정',apiTitle:'🔑 번역 API 키 (선생님 폰에만 저장)',apiPh:'API 키를 붙여넣으세요 (sk-… / sk-ant-… / AIza…)',
+ apiNotesPh:'이름·용어 메모 (선택) 예) 오션중학교=海洋中学, 교감 선생님=副校长',apiSave:'저장·연결 확인',apiTry:'🔊 목소리 듣기',apiDel:'삭제',
+ apiOff:'키 없음 · 무료 번역',apiOn:'AI 번역 사용 중',apiChecking:'연결 확인 중…',apiErr:'API 오류 — 이번 문장은 무료 번역으로 대신했어요',translating:'번역 중…'},
 zh:{back:'返回',modeTitle:'请选择对话方式',modeSub:'双方各用一部手机，对方说的话会以字幕和语音翻译到您的手机上。',
  create:'创建房间',createDesc:'生成号码并给对方看',join:'加入房间',joinDesc:'输入对方给您的4位号码',
  solo:'一部手机面对面',soloDesc:'把一部手机放在桌上共同使用',
@@ -267,7 +293,7 @@ zh:{back:'返回',modeTitle:'请选择对话方式',modeSub:'双方各用一部�
  send:'发送',typePh:'输入文字发送',noSR:'此浏览器不支持语音识别。请使用安卓 Chrome 或苹果 Safari。可以用下方 ⌨️ 输入文字。',
  micDenied:'麦克风权限已关闭，请在浏览器设置中允许麦克风。',tfail:'翻译失败 — 显示原文',
  settings:'设置',voice:'语音朗读',speed:'朗读速度',font:'字体大小',leave:'退出',close:'关闭',
- soloHint:'请按下后说话',soloOn:'正在听 · 再按停止',room:'房间'},
+ soloHint:'请按下后说话',soloOn:'正在听 · 再按停止',room:'房间',translating:'翻译中…'},
 en:{back:'Back',modeTitle:'How do you want to talk?',modeSub:'Each person uses their own phone; speech is translated to the other phone as subtitles and voice.',
  create:'Create room',createDesc:'Make a code and show it',join:'Join room',joinDesc:'Enter the 4-digit code',
  solo:'One phone, face to face',soloDesc:'Share one phone on the table',
@@ -281,7 +307,7 @@ en:{back:'Back',modeTitle:'How do you want to talk?',modeSub:'Each person uses t
  send:'Send',typePh:'Type to send',noSR:'Speech recognition is not supported here. Use Chrome (Android) or Safari (iPhone). You can still type with ⌨️.',
  micDenied:'Microphone is blocked. Please allow it in browser settings.',tfail:'Translation failed — showing original',
  settings:'Settings',voice:'Read aloud',speed:'Speed',font:'Text size',leave:'Leave',close:'Close',
- soloHint:'Tap and speak',soloOn:'Listening · tap to stop',room:'Room'}
+ soloHint:'Tap and speak',soloOn:'Listening · tap to stop',room:'Room',translating:'Translating…'}
 };
 
 /* ================= State ================= */
@@ -299,16 +325,14 @@ function applyLang(){
   document.documentElement.lang = S.my==='zh'?'zh-CN':S.my;
   document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));
   $('type-in').placeholder = t('typePh');
+  const ba=$('b-api'); if(ba) ba.style.display = S.my==='ko' ? '' : 'none';
 }
 function show(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active', s.id===id)); }
 let toastT; function toast(msg,ms=2600){ const el=$('toast'); el.textContent=msg; el.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('on'),ms); }
 document.documentElement.style.setProperty('--fs', S.fs);
 
-/* ================= Translation ================= */
-const tcache = new Map();
-async function translate(text, from, to){
-  if(!text || from===to) return text;
-  const key = from+'|'+to+'|'+text; if(tcache.has(key)) return tcache.get(key);
+/* ================= Translation (free services) ================= */
+async function freeTranslate(text, from, to){
   let out = null;
   try{
     const u = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl='+LANGS[from].gt+'&tl='+LANGS[to].gt+'&q='+encodeURIComponent(text);
@@ -321,30 +345,244 @@ async function translate(text, from, to){
       if(d && d.responseData && d.responseStatus==200) out = d.responseData.translatedText;
     }catch(e2){}
   }
-  if(out){ tcache.set(key,out); if(tcache.size>300) tcache.delete(tcache.keys().next().value); }
   return out;
 }
 
-/* ================= Speech output (TTS) ================= */
+/* ================= Paid API (key stays only on this phone) ================= */
+const convo = [];   // recent utterances, used as context for AI translation
+function remember(text, lang){ convo.push({text, lang}); if(convo.length>8) convo.shift(); }
+
+function apiErr(status, msg){ const e = new Error(msg||('HTTP '+status)); e.status = status; return e; }
+async function jfetch(url, opts, ms=15000){
+  const ac = new AbortController(); const tm = setTimeout(()=>ac.abort(), ms);
+  try{
+    const r = await fetch(url, Object.assign({signal:ac.signal}, opts));
+    if(!r.ok){ let tx=''; try{ tx = await r.text(); }catch{} throw apiErr(r.status, tx.slice(0,300)); }
+    return r;
+  }catch(e){ if(e.status) throw e; throw apiErr(0, String(e && e.message || e)); }
+  finally{ clearTimeout(tm); }
+}
+const isModelErr = e => e.status===404 || (e.status===400 && /model|not.?found|not.?supported|does not exist|invalid.*model/i.test(e.message));
+function b64FromBuf(buf){ const u8=new Uint8Array(buf); let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null, u8.subarray(i,i+0x8000)); return btoa(s); }
+function cleanOut(s){ return (s||'').trim().replace(/^["“「『']+|["”」』']+$/g,'').trim(); }
+
+const MODELS = {
+  openai: ['gpt-4.1-mini','gpt-4o-mini','gpt-5-mini'],
+  claude: ['claude-haiku-5-5','claude-haiku-4-5','claude-sonnet-4-5','claude-3-5-haiku-latest'],
+  gemini: ['gemini-2.5-flash-lite','gemini-flash-lite-latest','gemini-2.0-flash','gemini-2.5-flash','gemini-flash-latest'],
+  oaTTS:  ['gpt-4o-mini-tts','tts-1'],
+};
+const GVOICES = {
+  ko: [['ko-KR','ko-KR-Chirp3-HD-Aoede'],['ko-KR','ko-KR-Neural2-A'],['ko-KR','ko-KR-Wavenet-A']],
+  zh: [['cmn-CN','cmn-CN-Chirp3-HD-Aoede'],['cmn-CN','cmn-CN-Wavenet-A'],['cmn-CN','cmn-CN-Standard-A']],
+  en: [['en-US','en-US-Chirp3-HD-Aoede'],['en-US','en-US-Neural2-F'],['en-US','en-US-Wavenet-F']],
+};
+const Api = {
+  key: store.get('apikey',''), notes: store.get('apinotes',''),
+  st: store.get('apistate', null),   // {kind, model, tts, ttsModel, gv:{lang:index}}
+  lastWarn: 0,
+  ready(){ return !!(this.key && this.st && this.st.kind); },
+  canSpeak(){ return this.ready() && !!this.st.tts; },
+  detect(k){ if(/^sk-ant-/.test(k)) return 'claude'; if(/^sk-/.test(k)) return 'openai'; if(/^AIza/.test(k)) return 'google'; return null; },
+  save(){ store.set('apistate', this.st); },
+  warn(){ const n=Date.now(); if(n-this.lastWarn>20000){ this.lastWarn=n; toast(t('apiErr'),3500); } },
+
+  prompt(from, to){
+    let s = 'You are a professional live interpreter at a Korean middle school during an official visit (guests include education officials from Shanghai, China). '
+      + 'Translate the speaker\'s utterance from '+LANGS[from].en+' into '+LANGS[to].en+'. '
+      + 'Use natural, warm, polite spoken language suitable for a formal conversation with honored guests. '
+      + (to==='ko' ? 'In Korean use polite 존댓말 (합니다/해요체). ' : '')
+      + (to==='zh' ? 'In Chinese use Simplified characters and the polite 您. ' : '')
+      + 'The text comes from speech recognition and may contain recognition errors or missing punctuation: infer the intended meaning and add punctuation. '
+      + 'Keep names, titles and numbers accurate. Output ONLY the translation, with no quotes, notes or explanations.';
+    if(this.notes.trim()) s += '\nGlossary / names to use (source=target): '+this.notes.trim();
+    return s;
+  },
+  userMsg(text, from){
+    const ctx = convo.filter(c=>c.text!==text).slice(-6).map(c=>'['+LANGS[c.lang].en+'] '+c.text).join('\n');
+    return (ctx ? 'Recent conversation (context only, do not translate):\n'+ctx+'\n\n' : '')
+      + 'Utterance to translate ('+LANGS[from].en+'):\n'+text;
+  },
+  async withModels(list, saved, fn){
+    const order = saved ? [saved, ...list.filter(m=>m!==saved)] : list;
+    let last;
+    for(const m of order){
+      try{ const out = await fn(m); return {out, model:m}; }
+      catch(e){ last = e; if(!isModelErr(e)) throw e; }
+    }
+    throw last || apiErr(0,'no model');
+  },
+  async llm(kind, sys, user, savedModel){
+    const k = this.key;
+    if(kind==='openai') return this.withModels(MODELS.openai, savedModel, async m=>{
+      const body = {model:m, messages:[{role:'system',content:sys},{role:'user',content:user}]};
+      if(!/^gpt-5/.test(m)) body.temperature = 0.2;
+      const r = await jfetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+k},body:JSON.stringify(body)});
+      const d = await r.json(); return d.choices[0].message.content;
+    });
+    if(kind==='claude') return this.withModels(MODELS.claude, savedModel, async m=>{
+      const r = await jfetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:m, max_tokens:500, system:sys, messages:[{role:'user',content:user}]})});
+      const d = await r.json(); return (d.content||[]).filter(c=>c.type==='text').map(c=>c.text).join('');
+    });
+    if(kind==='gemini') return this.withModels(MODELS.gemini, savedModel, async m=>{
+      const r = await jfetch('https://generativelanguage.googleapis.com/v1beta/models/'+m+':generateContent?key='+encodeURIComponent(k),{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({systemInstruction:{parts:[{text:sys}]}, contents:[{role:'user',parts:[{text:user}]}], generationConfig:{temperature:0.2, maxOutputTokens:1024}})});
+      const d = await r.json(); const out = ((d.candidates||[])[0]?.content?.parts||[]).map(p=>p.text||'').join('');
+      if(!out) throw apiErr(500,'empty'); return out;
+    });
+    throw apiErr(0,'unknown');
+  },
+  async gcloudTranslate(text, from, to){
+    const r = await jfetch('https://translation.googleapis.com/language/translate/v2?key='+encodeURIComponent(this.key),{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({q:text, source:LANGS[from].gt, target:LANGS[to].gt, format:'text'})});
+    const d = await r.json(); return d.data.translations[0].translatedText;
+  },
+  async translate(text, from, to){
+    const st = this.st;
+    if(st.kind==='gcloud') return cleanOut(await this.gcloudTranslate(text, from, to));
+    const {out, model} = await this.llm(st.kind, this.prompt(from,to), this.userMsg(text,from), st.model);
+    if(model!==st.model){ st.model=model; this.save(); }
+    return cleanOut(out);
+  },
+
+  /* natural voice → base64 mp3 */
+  speechCache: new Map(),
+  speech(text, lang){
+    if(!this.canSpeak() || !text) return Promise.resolve(null);
+    const ck = lang+'|'+S.rate+'|'+text;
+    if(this.speechCache.has(ck)) return this.speechCache.get(ck);
+    const p = this._speech(text, lang).catch(e=>{ console.warn('tts', e); return null; });
+    this.speechCache.set(ck, p); p.then(v=>{ if(!v) this.speechCache.delete(ck); });
+    if(this.speechCache.size>60) this.speechCache.delete(this.speechCache.keys().next().value);
+    return p;
+  },
+  async _speech(text, lang, stOverride){
+    const st = stOverride || this.st, k = this.key;
+    if(st.tts==='openai'){
+      const {out, model} = await this.withModels(MODELS.oaTTS, st.ttsModel, async m=>{
+        const body = {model:m, input:text, response_format:'mp3'};
+        if(m==='tts-1'){ body.voice='nova'; body.speed=S.rate; }
+        else { body.voice='coral'; body.instructions='Speak in a warm, polite, natural voice at a calm conversational pace, like a friendly professional interpreter.'+(S.rate<1?' Speak a little slowly.':S.rate>1?' Speak a little quickly.':''); }
+        const r = await jfetch('https://api.openai.com/v1/audio/speech',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+k},body:JSON.stringify(body)}, 20000);
+        return b64FromBuf(await r.arrayBuffer());
+      });
+      if(model!==st.ttsModel){ st.ttsModel=model; this.save(); }
+      return out;
+    }
+    if(st.tts==='gcloud'){
+      st.gv = st.gv || {};
+      const list = GVOICES[lang]; let i = st.gv[lang]||0, last;
+      for(; i<list.length; i++){
+        try{
+          const r = await jfetch('https://texttospeech.googleapis.com/v1/text:synthesize?key='+encodeURIComponent(k),{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({input:{text}, voice:{languageCode:list[i][0], name:list[i][1]}, audioConfig:{audioEncoding:'MP3', speakingRate:S.rate}})}, 20000);
+          const d = await r.json();
+          if(st.gv[lang]!==i){ st.gv[lang]=i; this.save(); }
+          return d.audioContent;
+        }catch(e){ last=e; if(e.status!==400 && e.status!==404) throw e; }
+      }
+      throw last;
+    }
+    return null;
+  },
+
+  /* first-time check when the key is saved */
+  async setup(key){
+    const kind = this.detect(key);
+    if(!kind) return {ok:false, msg:'❌ 알 수 없는 키 형식이에요.\n지원: OpenAI(sk-…), Claude(sk-ant-…), Google(AIza…)\n파파고·DeepL 키라면 휴대폰에서 직접 쓸 수 없어서 중간 서버가 필요해요.'};
+    this.key = key;
+    const sys = this.prompt('ko','zh'), user = 'Utterance to translate (Korean):\n안녕하세요, 저희 학교에 오신 것을 환영합니다';
+    const st = {kind:null};
+    let sample = '', info = [];
+    const why = e => e.status===401||e.status===403 ? '키가 올바르지 않거나 권한이 없어요' : e.status===429 ? '사용 한도 초과 또는 결제(크레딧) 확인이 필요해요' : e.status===0 ? '인터넷 연결 또는 접속이 막혔어요' : ('오류 '+e.status);
+    try{
+      if(kind==='google'){
+        try{ const g = await this.llm('gemini', sys, user); st.kind='gemini'; st.model=g.model; sample=g.out; }
+        catch(e1){ try{ sample = await this.gcloudTranslate('안녕하세요, 저희 학교에 오신 것을 환영합니다','ko','zh'); st.kind='gcloud'; }catch(e2){ throw e2.status? e2 : e1; } }
+      } else { const r = await this.llm(kind, sys, user); st.kind=kind; st.model=r.model; sample=r.out; }
+    }catch(e){ this.key = store.get('apikey',''); return {ok:false, msg:'❌ 연결 실패: '+why(e)}; }
+    // natural voice
+    const ttsKind = kind==='openai' ? 'openai' : kind==='google' ? 'gcloud' : null;
+    if(ttsKind){
+      const tst = Object.assign({}, st, {tts:ttsKind});
+      try{ const a = await this._speech('您好','zh', tst); if(a){ st.tts=ttsKind; st.ttsModel=tst.ttsModel; st.gv=tst.gv; } }catch(e){ console.warn(e); }
+    }
+    this.st = st; store.set('apikey', key); this.save();
+    this.speechCache.clear(); tcache.clear();
+    const name = {openai:'OpenAI', claude:'Claude', gemini:'Google Gemini', gcloud:'Google 번역'}[st.kind];
+    info.push('✅ '+name+' 연결 성공'+(st.model?' ('+st.model+')':''));
+    info.push('번역 예시: '+cleanOut(sample));
+    info.push(st.tts ? '🔊 자연스러운 AI 목소리 사용' : (kind==='claude' ? '🔊 Claude는 음성 기능이 없어서, 휴대폰의 가장 자연스러운 목소리를 골라 써요' : '🔊 AI 음성은 이 키로 쓸 수 없어서 휴대폰 목소리를 써요'));
+    return {ok:true, msg:info.join('\n')};
+  },
+  clear(){ this.key=''; this.st=null; store.set('apikey',''); store.set('apistate',null); this.speechCache.clear(); tcache.clear(); }
+};
+
+const tcache = new Map();   // key -> Promise<string|null>
+function translate(text, from, to, opts={}){
+  if(!text || from===to) return Promise.resolve(text);
+  const useApi = Api.ready() && !opts.free;
+  const key = (useApi?'A|':'F|')+from+'|'+to+'|'+text;
+  if(tcache.has(key)) return tcache.get(key);
+  const p = (async()=>{
+    if(useApi){ try{ const r = await Api.translate(text, from, to); if(r) return r; }catch(e){ console.warn('api', e); Api.warn(); } }
+    return freeTranslate(text, from, to);
+  })();
+  tcache.set(key, p); p.then(v=>{ if(!v) tcache.delete(key); });
+  if(tcache.size>300) tcache.delete(tcache.keys().next().value);
+  return p;
+}
+
+/* ================= Speech output ================= */
 let voices = [];
 function loadVoices(){ try{ voices = speechSynthesis.getVoices()||[]; }catch{} }
 if('speechSynthesis' in window){ loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+// pick the most natural-sounding built-in voice
 function pickVoice(lang){
   const pre = LANGS[lang].sr.toLowerCase(), base = pre.split('-')[0];
   const list = voices.filter(v=>v.lang && v.lang.toLowerCase().replace('_','-').startsWith(base));
-  if(lang==='zh'){ const cn = list.find(v=>/zh[-_]cn|cmn/i.test(v.lang)); if(cn) return cn; }
-  return list.find(v=>v.lang.toLowerCase().replace('_','-')===pre) || list[0] || null;
+  const score = v=>{
+    const n = v.name||'', l = v.lang.toLowerCase().replace('_','-'); let s = 0;
+    if(/natural|neural|premium|enhanced|online|siri/i.test(n)) s += 5;
+    if(/google/i.test(n)) s += 3;
+    if(v.localService===false) s += 1;
+    if(l===pre) s += 2;
+    if(lang==='zh' && /zh-cn|cmn/.test(l)) s += 3;
+    if(lang==='zh' && /hk|tw|yue/.test(l)) s -= 4;
+    if(/compact|eloquence|novelty|bells|whisper|zarvox|bad news|bahh|boing|bubbles|cellos|jester|organ|superstar|trinoids|wobble/i.test(n)) s -= 6;
+    return s;
+  };
+  return list.sort((a,b)=>score(b)-score(a))[0] || null;
 }
+// one reusable <audio> element; "unlocked" on the first tap so later plays are allowed (iPhone)
+const player = new Audio(); player.setAttribute('playsinline',''); player.preload='auto';
+const SILENT = (()=>{ const n=800, b=new ArrayBuffer(44+n), v=new DataView(b); const w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  w(0,'RIFF'); v.setUint32(4,36+n,true); w(8,'WAVE'); w(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,8000,true); v.setUint32(28,8000,true); v.setUint16(32,1,true); v.setUint16(34,8,true); w(36,'data'); v.setUint32(40,n,true);
+  for(let i=0;i<n;i++) v.setUint8(44+i,128); return 'data:audio/wav;base64,'+b64FromBuf(b); })();
+let audioUnlocked = false;
 function unlockAudio(){
-  try{ if(!('speechSynthesis' in window)) return; const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); }catch{}
+  try{ if('speechSynthesis' in window){ const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); } }catch{}
+  if(!audioUnlocked){ try{ player.src = SILENT; const p = player.play(); if(p) p.then(()=>{ audioUnlocked=true; }).catch(()=>{}); }catch{} }
 }
-let ttsChain = Promise.resolve(), ttsCount = 0;
-function speak(text, lang, onStart, onEnd){
-  if(!S.voice || !('speechSynthesis' in window) || !text) return;
-  ttsCount++;
-  if(ttsCount===1){ Listener.pause('tts'); Net.send({type:'tts', on:true}); }
-  onStart && onStart();
-  ttsChain = ttsChain.then(()=>new Promise(res=>{
+function playB64(b64){
+  return new Promise(res=>{
+    let done=false, url=null; const fin=ok=>{ if(done) return; done=true; if(url) setTimeout(()=>URL.revokeObjectURL(url),1000); res(ok); };
+    try{
+      const bin = atob(b64), u8 = new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i);
+      url = URL.createObjectURL(new Blob([u8],{type:'audio/mpeg'}));
+      player.onended = ()=>fin(true); player.onerror = ()=>fin(false);
+      player.onloadedmetadata = ()=>{ if(isFinite(player.duration)) setTimeout(()=>fin(true), player.duration*1000/S.rate + 1500); };
+      player.src = url; player.defaultPlaybackRate = 1; player.playbackRate = 1;
+      const p = player.play(); if(p) p.catch(()=>fin(false));
+      setTimeout(()=>fin(true), 40000);
+    }catch{ fin(false); }
+  });
+}
+function browserSpeak(text, lang){
+  return new Promise(res=>{
+    if(!('speechSynthesis' in window)) return res();
     let done=false; const fin=()=>{ if(done) return; done=true; res(); };
     try{
       const u = new SpeechSynthesisUtterance(text);
@@ -353,7 +591,22 @@ function speak(text, lang, onStart, onEnd){
       speechSynthesis.speak(u);
       setTimeout(fin, 2500 + text.length*(lang==='en'?90:280)/S.rate);
     }catch{ fin(); }
-  })).then(()=>{
+  });
+}
+const withTimeout = (p, ms) => Promise.race([p, new Promise(r=>setTimeout(()=>r(null), ms))]);
+let ttsChain = Promise.resolve(), ttsCount = 0;
+// audioP: optional Promise<base64 mp3> made by the AI phone; otherwise this phone makes it (if it has a key)
+function speak(text, lang, onStart, onEnd, audioP){
+  if(!S.voice || !text) return;
+  if(!audioP && Api.canSpeak()) audioP = Api.speech(text, lang);
+  ttsCount++;
+  if(ttsCount===1){ Listener.pause('tts'); Net.send({type:'tts', on:true}); }
+  ttsChain = ttsChain.then(async()=>{
+    onStart && onStart();
+    let b64 = null; if(audioP){ try{ b64 = await withTimeout(audioP, 9000); }catch{} }
+    let ok = false; if(b64 && S.voice) ok = await playB64(b64);
+    if(!ok && S.voice) await browserSpeak(text, lang);
+  }).catch(()=>{}).then(()=>{
     onEnd && onEnd();
     ttsCount--;
     if(ttsCount===0){ Net.send({type:'tts', on:false}); setTimeout(()=>Listener.resume('tts'), 350); }
@@ -427,13 +680,13 @@ const Net = {
   online(){ return this.clients.some(c=>c.connected); },
   send(obj){
     if(!this.topic) return;
-    const m = Object.assign({mid:myId+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6), from:myId, lang:S.my}, obj);
+    const m = Object.assign({mid:myId+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,6), from:myId, lang:S.my, api:Api.ready()?1:0}, obj);
     const s = JSON.stringify(m);
     this.clients.forEach(c=>{ if(c.connected) try{ c.publish(this.topic, s, {qos:0}); }catch{} });
   },
   _handle(m){
     const isNew = !this.peers.has(m.from);
-    this.peers.set(m.from, {lang:m.lang, last:Date.now()});
+    this.peers.set(m.from, {lang:m.lang, api:!!m.api, last:Date.now()});
     if(isNew){ this.send({type:'hello'}); onPeerJoin(m.from); updateNet(); }
     if(m.type==='bye'){ this.peers.delete(m.from); releaseHold(m.from); updateNet(); toast(t('left')); return; }
     this.onMsg && this.onMsg(m);
@@ -445,6 +698,36 @@ const Net = {
   },
   partnerLang(){ for(const p of this.peers.values()) if(p.lang!==S.my) return p.lang; return null; }
 };
+/* The phone with an API key ("AI phone") also translates + makes voice for phones without a key.
+   If several phones have keys, only the one with the smallest id does it (no double cost). */
+function hostInRoom(){ if(Api.ready()) return true; for(const p of Net.peers.values()) if(p.api) return true; return false; }
+function isHost(){ if(!Api.ready()) return false; for(const [id,p] of Net.peers) if(p.api && id<myId) return false; return true; }
+const relay = new Map();   // sid -> {tr:{}, audio:{}, au:false, w:[]}
+function rbox(sid){ let b=relay.get(sid); if(!b){ b={tr:{},audio:{},mine:{},au:false,w:[]}; relay.set(sid,b); if(relay.size>80) relay.delete(relay.keys().next().value); } return b; }
+function waitRelay(sid, kind, lang, ms){
+  return new Promise(res=>{ const b=rbox(sid); if(lang in b[kind]) return res(b[kind][lang]);
+    const w={kind,lang,res}; b.w.push(w); setTimeout(()=>{ const i=b.w.indexOf(w); if(i>=0){ b.w.splice(i,1); res(undefined); } }, ms); });
+}
+function deliver(sid, kind, lang, val){ const b=rbox(sid); b[kind][lang]=val; b.w=b.w.filter(w=>{ if(w.kind===kind&&w.lang===lang){ w.res(val); return false; } return true; }); }
+async function hostServe(sid, text, from){
+  if(!isHost()) return;
+  const langs = new Set(); for(const p of Net.peers.values()) if(!p.api && p.lang && p.lang!==from) langs.add(p.lang);
+  const keyless = [...Net.peers.values()].some(p=>!p.api);
+  if(!keyless) return;
+  const trLangs = new Set(langs); if(from!==S.my) trLangs.add(S.my);   // also lets the speaker see how it was translated
+  const tr = {};
+  await Promise.all([...trLangs].map(async L=>{ tr[L] = (await translate(text, from, L)) || null; }));
+  const au = Api.canSpeak() && S.voice;
+  Net.send({type:'tr', sid, tr, au:au?1:0});
+  if(!au) return;
+  [...langs].forEach(L=>{
+    if(!tr[L]) return Net.send({type:'audio', sid, to:L, none:1});
+    Api.speech(tr[L], L).then(b64=>{
+      if(b64 && b64.length < 230000) Net.send({type:'audio', sid, to:L, b64});
+      else Net.send({type:'audio', sid, to:L, none:1});
+    });
+  });
+}
 function updateNet(){
   const pill=$('net-pill'), txt=$('net-text'); if(!pill) return;
   const n = Net.peers.size, on = Net.online();
@@ -452,6 +735,7 @@ function updateNet(){
   if(!on) txt.textContent = Net.clients.length? t('connecting') : t('offline');
   else if(n===0) txt.textContent = t('alone');
   else { const flags=[...Net.peers.values()].map(p=>LANGS[p.lang]?.flag||'').join(''); txt.textContent = t('connected')+' '+flags; }
+  const ai=$('ai-badge'); if(ai) ai.classList.toggle('on', hostInRoom());
   if(S.mode==='create' && n>0 && document.getElementById('s-create').classList.contains('active')) enterTalk();
 }
 const holdTimers = new Map();
@@ -511,9 +795,15 @@ function sendInterim(txt){
 function sendFinal(txt){
   const sid = interimSid || (myId+'-'+Date.now()); interimSid=null;
   Net.send({type:'final', text:txt, sid});
+  remember(txt, S.my);
   const el = addLog('me', txt, '');
+  hostServe(sid, txt, S.my);
   const pl = Net.partnerLang();
-  if(pl) translate(txt, S.my, pl).then(tr=>{ if(tr) el.querySelector('small').textContent = LANGS[pl].flag+' '+tr; });
+  if(pl){
+    const show = tr=>{ if(tr) el.querySelector('small').textContent = LANGS[pl].flag+' '+tr; };
+    if(!Api.ready() && hostInRoom()) waitRelay(sid,'mine',pl,8000).then(tr=> tr ? show(tr) : translate(txt, S.my, pl).then(show));
+    else translate(txt, S.my, pl).then(show);
+  }
 }
 $('b-type').onclick = ()=>{ $('typebar').classList.toggle('on'); if($('typebar').classList.contains('on')) $('type-in').focus(); };
 function sendTyped(){ const v=$('type-in').value.trim(); if(!v) return; $('type-in').value=''; sendFinal(v); }
@@ -526,7 +816,7 @@ function addLog(who, big, small, lang){
   const s=document.createElement('small'); s.textContent=small; d.appendChild(s);
   if(who==='them' && lang){
     const r=document.createElement('button'); r.className='replay'; r.textContent='🔊';
-    r.onclick=()=>speak(big, S.my); b.appendChild(r);
+    r.onclick=()=>{ unlockAudio(); speak(big, S.my, null, null, d._audio); }; b.appendChild(r);
   }
   const log=$('log'); log.appendChild(d); log.scrollTop=log.scrollHeight;
   return d;
@@ -541,6 +831,14 @@ Net.onMsg = async m=>{
     else releaseHold(m.from);
     return;
   }
+  if(m.type==='tr'){
+    const b=rbox(m.sid); b.au = !!m.au;
+    Object.keys(m.tr||{}).forEach(L=>deliver(m.sid,'tr',L,m.tr[L]));
+    // my own sentence translated by the AI phone → show under my bubble
+    if(m.sid && m.sid.startsWith(myId+'-')) Object.keys(m.tr||{}).forEach(L=>{ if(m.tr[L]) deliver(m.sid,'mine',L,m.tr[L]); });
+    return;
+  }
+  if(m.type==='audio'){ deliver(m.sid,'audio',m.to, m.b64||null); return; }
   if(S.mode==='solo') return;
   const flag = LANGS[m.lang]?.flag || '';
   if(m.type==='interim'){
@@ -551,23 +849,30 @@ Net.onMsg = async m=>{
     const st = liveTr[m.sid] || (liveTr[m.sid]={last:0,busy:false,done:false});
     if(!st.busy && Date.now()-st.last>1100){
       st.busy=true; st.last=Date.now();
-      const tr = await translate(m.text, m.lang, S.my); st.busy=false;
+      const tr = await translate(m.text, m.lang, S.my, {free:true}); st.busy=false;
       if(tr && !st.done) $('sub-big').textContent = tr + ' …';
     }
     return;
   }
   if(m.type==='final'){
     if(liveTr[m.sid]) liveTr[m.sid].done = true;
+    remember(m.text, m.lang);
+    hostServe(m.sid, m.text, m.lang);
     if(m.lang===S.my){ addLog('them', m.text, flag); return; }
     $('sub-orig').textContent = m.text;
-    const tr = await translate(m.text, m.lang, S.my);
+    if(!liveTr[m.sid] || !$('sub-big').textContent.trim()) $('sub-big').textContent = t('translating');
+    let tr = null, relayed = false;
+    if(!Api.ready() && hostInRoom()){ tr = await waitRelay(m.sid,'tr',S.my,5000); relayed = !!tr; }
+    if(!tr) tr = await translate(m.text, m.lang, S.my);
     const out = tr || m.text;
     const box=$('sub-main'); box.classList.remove('live');
     $('sub-who').textContent = flag+' '+t('partner');
     $('sub-big').textContent = out;
     if(!tr) toast(t('tfail'));
-    addLog('them', out, flag+' '+m.text, m.lang);
-    speak(out, S.my, ()=>box.classList.add('tts'), ()=>box.classList.remove('tts'));
+    const logEl = addLog('them', out, flag+' '+m.text, m.lang);
+    const audioP = (relayed && rbox(m.sid).au) ? waitRelay(m.sid,'audio',S.my,9000) : undefined;
+    if(audioP) logEl._audio = audioP;
+    speak(out, S.my, ()=>box.classList.add('tts'), ()=>box.classList.remove('tts'), audioP);
   }
 };
 
@@ -599,6 +904,8 @@ function soloCb(side){
     async final(txt){
       $('int-'+side).textContent='';
       $('orig-'+other).textContent = txt;
+      $('big-'+other).textContent = T[to].translating;
+      remember(txt, from);
       const tr = await translate(txt, from, to);
       $('big-'+other).textContent = tr || txt;
       const box=$('sub-'+other);
@@ -635,7 +942,36 @@ function seg(id, key, cast){
   paint();
 }
 seg('set-voice','voice', v=>v==='1'); seg('set-rate','rate', Number); seg('set-fs','fs', Number);
-function openSheet(){ $('sheet').classList.add('on'); }
+function apiPaint(){
+  const ok = Api.ready(), st=$('api-status');
+  st.textContent = ok ? '✨ '+t('apiOn') : t('apiOff'); st.classList.toggle('ok', ok);
+  $('api-key').placeholder = t('apiPh'); $('api-notes').placeholder = t('apiNotesPh');
+  if(ok && !$('api-key').value) $('api-key').value = Api.key;
+  $('api-notes').value = Api.notes;
+  updateNet();
+}
+function openSheet(){
+  $('api-sec').style.display = (S.my==='ko' || Api.key) ? '' : 'none';
+  $('b-leave').style.display = S.mode ? '' : 'none';
+  apiPaint(); $('sheet').classList.add('on');
+}
+$('b-api').onclick = ()=>openSheet();
+$('api-eye').onclick = ()=>{ const i=$('api-key'); i.type = i.type==='password' ? 'text' : 'password'; };
+$('api-notes').onchange = ()=>{ Api.notes = $('api-notes').value; store.set('apinotes', Api.notes); tcache.clear(); };
+$('api-save').onclick = async ()=>{
+  unlockAudio();
+  const k = $('api-key').value.trim().replace(/\s+/g,'');
+  Api.notes = $('api-notes').value; store.set('apinotes', Api.notes);
+  if(!k){ $('api-msg').textContent = t('apiPh'); return; }
+  const btn=$('api-save'); btn.disabled=true; btn.style.opacity=.6;
+  $('api-msg').textContent = '⏳ '+t('apiChecking');
+  const r = await Api.setup(k);
+  btn.disabled=false; btn.style.opacity=1;
+  $('api-msg').textContent = r.msg; apiPaint();
+  if(r.ok) Net.send({type:'ping'});
+};
+$('api-try').onclick = ()=>{ unlockAudio(); speak('您好！欢迎来到我们学校，很高兴见到您。','zh'); setTimeout(()=>speak('안녕하세요! 저희 학교에 오신 것을 환영합니다.','ko'), 300); };
+$('api-del').onclick = ()=>{ Api.clear(); $('api-key').value=''; $('api-msg').textContent=''; apiPaint(); Net.send({type:'ping'}); };
 $('b-set').onclick = openSheet;
 $('b-close').onclick = ()=>$('sheet').classList.remove('on');
 $('sheet').onclick = e=>{ if(e.target.id==='sheet') $('sheet').classList.remove('on'); };
